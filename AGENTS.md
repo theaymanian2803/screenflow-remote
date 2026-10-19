@@ -8,3 +8,5 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
+
+- Keep capture presets, media acquisition, audio mixing, and resource cleanup in the browser-only `src/lib/recording-media.ts` helper so capture behavior can be tested independently of the recorder UI.
