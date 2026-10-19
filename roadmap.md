@@ -1,2 +1,2 @@
-- [ ] Add recording quality presets and independent system/microphone audio controls.
-- [ ] Verify quality constraints, audio mixing, permissions, and recording playback.
+- [x] Add recording quality presets and independent system/microphone audio controls.
+- [x] Verify quality constraints, audio mixing, permissions, and recording playback (12 tests passed; browser recording/download/playback checked with simulated capture devices).
