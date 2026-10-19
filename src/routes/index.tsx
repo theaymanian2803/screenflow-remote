@@ -76,7 +76,8 @@ function Dashboard() {
       streamRef.current?.getTracks().forEach((t) => t.stop());
       streamRef.current = s;
       if (videoRef.current) videoRef.current.srcObject = s;
-      s.getVideoTracks()[0].onended = () => {
+      const vt = s.getVideoTracks()[0];
+      if (vt) vt.onended = () => {
         if (recRef.current?.state !== "inactive") stop();
         else setState("idle");
       };
