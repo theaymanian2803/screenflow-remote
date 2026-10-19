@@ -1,0 +1,10 @@
+{
+  "name": "ScreenCast Remote",
+  "short_name": "CastRemote",
+  "start_url": "/remote",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#121214",
+  "theme_color": "#121214",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}
