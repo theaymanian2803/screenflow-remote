@@ -2,6 +2,9 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { Monitor, Circle, Pause, Play, Square, Download, Smartphone } from "lucide-react";
 import { openChannel, fmt, type RecState, type ConnState } from "@/lib/control-channel";
+import { captureMedia, QUALITY_PRESETS, type RecordingQuality } from "@/lib/recording-media";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -20,6 +23,7 @@ export const Route = createFileRoute("/")({
 function Dashboard() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const captureRef = useRef<Awaited<ReturnType<typeof captureMedia>> | null>(null);
   const recRef = useRef<MediaRecorder | null>(null);
   const chunks = useRef<Blob[]>([]);
   const chanRef = useRef<ReturnType<typeof openChannel> | null>(null);
@@ -30,14 +34,29 @@ function Dashboard() {
   const [wsUrl, setWsUrl] = useState("");
   const [conn, setConn] = useState<ConnState>("disconnected");
   const [peers, setPeers] = useState(0);
-  const [audio, setAudio] = useState(true);
+  const [systemAudio, setSystemAudio] = useState(true);
+  const [microphoneAudio, setMicrophoneAudio] = useState(false);
+  const [quality, setQuality] = useState<RecordingQuality>("high");
+  const [picking, setPicking] = useState(false);
+  const [captureError, setCaptureError] = useState("");
+  const [audioWarning, setAudioWarning] = useState("");
+  const bitrateRef = useRef(QUALITY_PRESETS.high.videoBitsPerSecond as number);
   const stateRef = useRef(state);
   stateRef.current = state;
 
   useEffect(() => {
     setRoom(localStorage.getItem("sc-room") || Math.random().toString(36).slice(2, 8).toUpperCase());
     setWsUrl(localStorage.getItem("sc-ws") ?? "");
+    return () => {
+      if (recRef.current?.state && recRef.current.state !== "inactive") {
+        recRef.current.onstop = null;
+        recRef.current.stop();
+      }
+      captureRef.current?.dispose();
+    };
   }, []);
+
+  useEffect(() => () => { if (blobUrl) URL.revokeObjectURL(blobUrl); }, [blobUrl]);
 
   useEffect(() => {
     if (!room) return;
@@ -71,19 +90,40 @@ function Dashboard() {
   }, [state]);
 
   async function pickSource() {
+    if (picking || stateRef.current === "recording" || stateRef.current === "paused") return;
+    setPicking(true);
+    setCaptureError("");
+    setAudioWarning("");
     try {
-      const s = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30 }, audio });
-      streamRef.current?.getTracks().forEach((t) => t.stop());
+      const capture = await captureMedia({ quality, systemAudio, microphoneAudio });
+      captureRef.current?.dispose();
+      captureRef.current = capture;
+      const s = capture.stream;
       streamRef.current = s;
+      bitrateRef.current = QUALITY_PRESETS[quality].videoBitsPerSecond;
+      if (capture.missingSystemAudio) setAudioWarning("System audio wasn’t shared. The recording will include only the other selected audio, if any.");
       if (videoRef.current) videoRef.current.srcObject = s;
       const vt = s.getVideoTracks()[0];
       if (vt) vt.onended = () => {
-        if (recRef.current?.state !== "inactive") stop();
-        else setState("idle");
+        if (recRef.current && recRef.current.state !== "inactive") stop();
+        else { capture.dispose(); captureRef.current = null; streamRef.current = null; setState("idle"); }
       };
       setState("ready");
       setElapsed(0);
-    } catch { /* cancelled */ }
+    } catch (error) {
+      setCaptureError(error instanceof DOMException && error.name === "NotAllowedError"
+        ? "Screen or microphone access wasn’t granted. Choose a source again and allow the selected audio."
+        : error instanceof Error ? error.message : "Could not capture the selected screen and audio.");
+    } finally { setPicking(false); }
+  }
+  function resetSource() {
+    captureRef.current?.dispose();
+    captureRef.current = null;
+    streamRef.current = null;
+    if (videoRef.current) videoRef.current.srcObject = null;
+    setAudioWarning("");
+    setCaptureError("");
+    if (stateRef.current === "ready") setState("idle");
   }
   function start() {
     const s = streamRef.current;
@@ -92,7 +132,7 @@ function Dashboard() {
     if (blobUrl) URL.revokeObjectURL(blobUrl);
     setBlobUrl(null);
     const mime = ["video/webm;codecs=vp9,opus", "video/webm", "video/mp4"].find((m) => MediaRecorder.isTypeSupported(m));
-    const r = new MediaRecorder(s, mime ? { mimeType: mime } : undefined);
+    const r = new MediaRecorder(s, { ...(mime ? { mimeType: mime } : {}), videoBitsPerSecond: bitrateRef.current, audioBitsPerSecond: 128_000 });
     r.ondataavailable = (e) => e.data.size && chunks.current.push(e.data);
     r.onstop = () => setBlobUrl(URL.createObjectURL(new Blob(chunks.current, { type: r.mimeType })));
     r.start(1000);
@@ -104,7 +144,8 @@ function Dashboard() {
   function resume() { recRef.current?.resume(); setState("recording"); }
   function stop() {
     if (recRef.current && recRef.current.state !== "inactive") recRef.current.stop();
-    streamRef.current?.getTracks().forEach((t) => t.stop());
+    captureRef.current?.dispose();
+    captureRef.current = null;
     streamRef.current = null;
     setState("stopped");
   }
@@ -117,6 +158,7 @@ function Dashboard() {
   }
 
   const live = state === "recording";
+  const settingsLocked = live || state === "paused" || picking;
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">
       <header className="mb-8 flex items-center justify-between">
@@ -133,9 +175,9 @@ function Dashboard() {
             <video ref={videoRef} autoPlay muted playsInline className={`size-full object-contain ${state === "stopped" ? "hidden" : ""}`} />
             {state === "stopped" && blobUrl && <video src={blobUrl} controls className="size-full object-contain" />}
             {state === "idle" && (
-              <button onClick={pickSource} className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-muted-foreground hover:text-foreground">
+              <button onClick={pickSource} disabled={picking} className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-muted-foreground hover:text-foreground">
                 <Monitor className="size-12" />
-                <span className="font-medium">Choose a monitor, window or tab</span>
+                <span className="font-medium">{picking ? "Waiting for screen and audio access…" : "Choose a monitor, window or tab"}</span>
               </button>
             )}
             <div className="absolute left-4 top-4 rounded-full bg-background/80 px-3 py-1 font-mono text-sm">
@@ -143,8 +185,8 @@ function Dashboard() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-3 border-t p-4">
-            <button className="ctl" onClick={pickSource} disabled={live || state === "paused"}><Monitor className="size-4" /> Source</button>
-            <button className="ctl ctl-rec" onClick={start} disabled={state !== "ready"}><Circle className="size-4 fill-current" /> Start</button>
+            <button className="ctl" onClick={pickSource} disabled={settingsLocked}><Monitor className="size-4" /> Source</button>
+            <button className="ctl ctl-rec" onClick={start} disabled={state !== "ready" || picking}><Circle className="size-4 fill-current" /> Start</button>
             {state === "paused"
               ? <button className="ctl" onClick={resume}><Play className="size-4" /> Resume</button>
               : <button className="ctl" onClick={pause} disabled={!live}><Pause className="size-4" /> Pause</button>}
@@ -164,15 +206,36 @@ function Dashboard() {
             </div>
           </div>
           <div className="panel space-y-3 p-5 text-sm">
+            <h2 className="text-sm uppercase tracking-widest text-muted-foreground">Recording settings</h2>
+            <div className="space-y-2">
+              <label htmlFor="recording-quality" className="text-muted-foreground">Recording quality</label>
+              <Select value={quality} disabled={settingsLocked} onValueChange={(value) => {
+                if (value === "standard" || value === "high" || value === "smooth") { resetSource(); setQuality(value); }
+              }}>
+                <SelectTrigger id="recording-quality"><SelectValue /></SelectTrigger>
+                <SelectContent className="bg-card text-card-foreground">
+                  {Object.entries(QUALITY_PRESETS).map(([value, preset]) => <SelectItem key={value} value={value}>{preset.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <label htmlFor="system-audio">System audio</label>
+              <Switch id="system-audio" checked={systemAudio} disabled={settingsLocked} onCheckedChange={(checked) => { resetSource(); setSystemAudio(checked); }} />
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <label htmlFor="microphone-audio">Microphone audio</label>
+              <Switch id="microphone-audio" checked={microphoneAudio} disabled={settingsLocked} onCheckedChange={(checked) => { resetSource(); setMicrophoneAudio(checked); }} />
+            </div>
+            {captureError && <p role="alert" className="text-sm text-destructive">{captureError}</p>}
+            {audioWarning && <p role="status" className="text-sm text-warn">{audioWarning}</p>}
+          </div>
+          <div className="panel space-y-3 p-5 text-sm">
             <label className="block">
               <span className="text-muted-foreground">Relay server URL</span>
               <input defaultValue={wsUrl} key={wsUrl} onBlur={(e) => setWsUrl(e.target.value.trim())} placeholder="wss://your-relay.example.com"
                 className="mt-1 w-full rounded-md border bg-background px-3 py-2 font-mono" />
             </label>
             <p className="text-xs text-muted-foreground">Leave empty to test with a remote tab in this same browser.</p>
-            <label className="flex items-center gap-2">
-              <input type="checkbox" checked={audio} onChange={(e) => setAudio(e.target.checked)} /> Capture system audio
-            </label>
           </div>
         </aside>
       </div>

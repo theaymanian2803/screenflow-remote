@@ -1,0 +1,2 @@
+- [ ] Add recording quality presets and independent system/microphone audio controls.
+- [ ] Verify quality constraints, audio mixing, permissions, and recording playback.
