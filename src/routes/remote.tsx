@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Pause, Play, Square } from "lucide-react";
 import { openChannel, fmt, type RecState, type ConnState } from "@/lib/control-channel";
 import { createPeer, type Signal } from "@/lib/live-preview";
+import { PreviewHelp } from "@/components/PreviewHelp";
 
 export const Route = createFileRoute("/remote")({
   head: () => ({
@@ -142,6 +143,7 @@ function Remote() {
           )}
         </div>
       )}
+      {paired && <PreviewHelp context={{ conn, pcState, hasVideo, relayMode: wsUrl ? "relay" : "local" }} />}
 
       {paired && (
         <div className="fixed z-50 flex items-center gap-2" style={{ left: pos.x, top: pos.y }}>
