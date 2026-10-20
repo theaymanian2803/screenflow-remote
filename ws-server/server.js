@@ -26,7 +26,7 @@ wss.on("connection", (ws) => {
       broadcastPeers(ws.room);
       return;
     }
-    if (!ws.room || !["command", "status"].includes(m.type)) return;
+    if (!ws.room || !["command", "status", "hello", "signal"].includes(m.type)) return;
     for (const c of rooms.get(ws.room) ?? []) {
       if (c !== ws && c.readyState === 1) c.send(JSON.stringify(m));
     }

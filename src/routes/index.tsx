@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Monitor, Circle, Pause, Play, Square, Download, Smartphone } from "lucide-react";
 import { openChannel, fmt, type RecState, type ConnState } from "@/lib/control-channel";
 import { captureMedia, QUALITY_PRESETS, type RecordingQuality } from "@/lib/recording-media";
+import { createPeer, type Signal } from "@/lib/live-preview";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 
@@ -27,6 +28,7 @@ function Dashboard() {
   const recRef = useRef<MediaRecorder | null>(null);
   const chunks = useRef<Blob[]>([]);
   const chanRef = useRef<ReturnType<typeof openChannel> | null>(null);
+  const peerRef = useRef<RTCPeerConnection | null>(null);
   const [state, setState] = useState<RecState>("idle");
   const [elapsed, setElapsed] = useState(0);
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
@@ -66,6 +68,8 @@ function Dashboard() {
       url: wsUrl, room, role: "pc", onConn: setConn,
       onMessage: (m) => {
         if (m.type === "peers") setPeers(m.count - 1);
+        if (m.type === "hello") void offerPreview();
+        if (m.type === "signal") void onSignal(m.data);
         if (m.type === "command") {
           const s = stateRef.current;
           if (m.cmd === "play") s === "paused" ? resume() : s === "ready" && start();
@@ -89,6 +93,27 @@ function Dashboard() {
     return () => clearInterval(t);
   }, [state]);
 
+  function closePeer(notify = true) {
+    if (peerRef.current && notify) chanRef.current?.send({ type: "signal", data: { bye: true } });
+    peerRef.current?.close();
+    peerRef.current = null;
+  }
+  async function offerPreview() {
+    closePeer(false);
+    const s = streamRef.current;
+    if (!s || !chanRef.current) return;
+    const pc = createPeer((sig) => chanRef.current?.send({ type: "signal", data: sig }));
+    peerRef.current = pc;
+    s.getVideoTracks().forEach((t) => pc.addTrack(t, s));
+    await pc.setLocalDescription(await pc.createOffer());
+    chanRef.current?.send({ type: "signal", data: { sdp: pc.localDescription!.toJSON() } });
+  }
+  async function onSignal(d: Signal) {
+    const pc = peerRef.current;
+    if (!pc) return;
+    if (d.sdp?.type === "answer" && !pc.remoteDescription) await pc.setRemoteDescription(d.sdp).catch(() => {});
+    if (d.candidate) await pc.addIceCandidate(d.candidate).catch(() => {});
+  }
   async function pickSource() {
     if (picking || stateRef.current === "recording" || stateRef.current === "paused") return;
     setPicking(true);
@@ -106,8 +131,9 @@ function Dashboard() {
       const vt = s.getVideoTracks()[0];
       if (vt) vt.onended = () => {
         if (recRef.current && recRef.current.state !== "inactive") stop();
-        else { capture.dispose(); captureRef.current = null; streamRef.current = null; setState("idle"); }
+        else { closePeer(); capture.dispose(); captureRef.current = null; streamRef.current = null; setState("idle"); }
       };
+      void offerPreview();
       setState("ready");
       setElapsed(0);
     } catch (error) {
@@ -117,6 +143,7 @@ function Dashboard() {
     } finally { setPicking(false); }
   }
   function resetSource() {
+    closePeer();
     captureRef.current?.dispose();
     captureRef.current = null;
     streamRef.current = null;
@@ -143,6 +170,7 @@ function Dashboard() {
   function pause() { recRef.current?.pause(); setState("paused"); }
   function resume() { recRef.current?.resume(); setState("recording"); }
   function stop() {
+    closePeer();
     if (recRef.current && recRef.current.state !== "inactive") recRef.current.stop();
     captureRef.current?.dispose();
     captureRef.current = null;
