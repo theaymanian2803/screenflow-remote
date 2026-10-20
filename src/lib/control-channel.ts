@@ -1,9 +1,12 @@
+import type { Signal } from "./live-preview";
 export type Role = "pc" | "mobile";
 export type RecState = "idle" | "ready" | "recording" | "paused" | "stopped";
 export type Msg =
   | { type: "command"; cmd: "play" | "pause" | "stop" | "start" }
   | { type: "status"; state: RecState; elapsed: number }
-  | { type: "peers"; count: number };
+  | { type: "peers"; count: number }
+  | { type: "hello" }
+  | { type: "signal"; data: Signal };
 
 export type ConnState = "connecting" | "connected" | "disconnected";
 

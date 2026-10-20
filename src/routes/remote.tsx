@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { Pause, Play, Square } from "lucide-react";
 import { openChannel, fmt, type RecState, type ConnState } from "@/lib/control-channel";
+import { createPeer, type Signal } from "@/lib/live-preview";
 
 export const Route = createFileRoute("/remote")({
   head: () => ({
@@ -28,6 +29,10 @@ function Remote() {
   const [open, setOpen] = useState(true);
   const chan = useRef<ReturnType<typeof openChannel> | null>(null);
   const drag = useRef<{ dx: number; dy: number; moved: boolean } | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const peerRef = useRef<RTCPeerConnection | null>(null);
+  const pending = useRef<RTCIceCandidateInit[]>([]);
+  const [hasVideo, setHasVideo] = useState(false);
 
   useEffect(() => {
     setRoom(localStorage.getItem("sc-room") ?? "");
@@ -38,15 +43,44 @@ function Remote() {
     if (!paired || !room) return;
     localStorage.setItem("sc-room", room);
     localStorage.setItem("sc-ws", wsUrl);
+    const closePeer = () => {
+      peerRef.current?.close(); peerRef.current = null; pending.current = [];
+      if (videoRef.current) videoRef.current.srcObject = null;
+      setHasVideo(false);
+    };
+    const onSignal = async (d: Signal) => {
+      if (d.bye) return closePeer();
+      if (d.sdp?.type === "offer") {
+        closePeer();
+        const pc = createPeer((s) => chan.current?.send({ type: "signal", data: s }));
+        peerRef.current = pc;
+        pc.ontrack = (e) => {
+          if (videoRef.current) videoRef.current.srcObject = e.streams[0] ?? new MediaStream([e.track]);
+          setHasVideo(true);
+        };
+        await pc.setRemoteDescription(d.sdp);
+        for (const c of pending.current) await pc.addIceCandidate(c).catch(() => {});
+        pending.current = [];
+        await pc.setLocalDescription(await pc.createAnswer());
+        chan.current?.send({ type: "signal", data: { sdp: pc.localDescription!.toJSON() } });
+      }
+      if (d.candidate) {
+        const pc = peerRef.current;
+        if (pc?.remoteDescription) await pc.addIceCandidate(d.candidate).catch(() => {});
+        else pending.current.push(d.candidate);
+      }
+    };
     const ch = openChannel({
-      url: wsUrl, room, role: "mobile", onConn: setConn,
+      url: wsUrl, room, role: "mobile",
+      onConn: (s) => { setConn(s); if (s === "connected") setTimeout(() => chan.current?.send({ type: "hello" }), 0); },
       onMessage: (m) => {
         if (m.type === "status") { setPcState(m.state); setElapsed(m.elapsed); }
-        if (m.type === "peers" && m.count < 2) setPcState(null);
+        if (m.type === "peers" && m.count < 2) { setPcState(null); closePeer(); }
+        if (m.type === "signal") void onSignal(m.data);
       },
     });
     chan.current = ch;
-    return () => ch.close();
+    return () => { ch.close(); closePeer(); };
   }, [paired, room, wsUrl]);
 
   const send = (cmd: "play" | "pause" | "stop") => {
@@ -96,6 +130,16 @@ function Remote() {
         <div className="mt-6 space-y-2 text-sm text-muted-foreground">
           <p>Paired with <span className="font-mono text-accent">{room}</span>. Drag the bubble anywhere; tap it to show or hide controls.</p>
           <button className="underline" onClick={() => setPaired(false)}>Change pairing</button>
+        </div>
+      )}
+      {paired && (
+        <div className="panel relative mt-4 aspect-video overflow-hidden bg-background">
+          <video ref={videoRef} autoPlay muted playsInline className="size-full object-contain" />
+          {!hasVideo && (
+            <div className="absolute inset-0 flex items-center justify-center p-4 text-center text-sm text-muted-foreground">
+              Live preview appears here once a screen or window is chosen on the computer.
+            </div>
+          )}
         </div>
       )}
 
