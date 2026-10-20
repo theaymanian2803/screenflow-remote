@@ -131,8 +131,9 @@ function Dashboard() {
       const vt = s.getVideoTracks()[0];
       if (vt) vt.onended = () => {
         if (recRef.current && recRef.current.state !== "inactive") stop();
-        else { capture.dispose(); captureRef.current = null; streamRef.current = null; setState("idle"); }
+        else { closePeer(); capture.dispose(); captureRef.current = null; streamRef.current = null; setState("idle"); }
       };
+      void offerPreview();
       setState("ready");
       setElapsed(0);
     } catch (error) {
@@ -142,6 +143,7 @@ function Dashboard() {
     } finally { setPicking(false); }
   }
   function resetSource() {
+    closePeer();
     captureRef.current?.dispose();
     captureRef.current = null;
     streamRef.current = null;
@@ -168,6 +170,7 @@ function Dashboard() {
   function pause() { recRef.current?.pause(); setState("paused"); }
   function resume() { recRef.current?.resume(); setState("recording"); }
   function stop() {
+    closePeer();
     if (recRef.current && recRef.current.state !== "inactive") recRef.current.stop();
     captureRef.current?.dispose();
     captureRef.current = null;
