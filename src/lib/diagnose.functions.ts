@@ -16,7 +16,7 @@ export const diagnosePreview = createServerFn({ method: "POST" })
     return { problem, context: d.context };
   })
   .handler(async ({ data }) => {
-    const apiKey = process.env.LOVABLE_API_KEY;
+    const apiKey = process.env["LOVABLE_API_KEY"];
     if (!apiKey) return { error: "AI help isn't configured yet." };
     const { createOpenAI } = await import("@ai-sdk/openai");
     const { streamText } = await import("ai");
