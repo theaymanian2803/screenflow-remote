@@ -7,7 +7,8 @@ type Input = {
 
 const SYSTEM = `You troubleshoot a browser screen recorder whose phone remote shows a live preview of the computer screen.
 How it works: the computer shares a screen with getDisplayMedia; the phone and computer exchange WebRTC offers/answers over a WebSocket relay (or BroadcastChannel in "local" mode, same browser only); video then flows peer-to-peer using only a public STUN server (no TURN). Only video is previewed, no audio.
-Given the user's description and the live diagnostics, list the 2-4 most likely causes (most likely first) and concrete fix steps a non-technical person can follow. Be concise, use short markdown bullets, no preamble.`;
+Real UI labels (use only these): computer dashboard has a "Source" button to choose a screen/window, "Start", "Pause", "Stop", "Save", a "Pair code", and a "Relay server URL" field (empty = local mode). Phone remote has "Pair code from your PC", "Relay server URL (same as PC)", "Connect" and "Change pairing". Diagnostics: conn = phone's link to relay; pcState = computer recorder state (null = computer not seen); hasVideo = preview received.
+Given the user's description and the live diagnostics, list the 2-4 most likely causes (most likely first) and concrete fix steps a non-technical person can follow. Be concise, use short markdown bullets, plain words, no preamble, don't quote raw diagnostic field names.`;
 
 export const diagnosePreview = createServerFn({ method: "POST" })
   .inputValidator((d: Input) => {
