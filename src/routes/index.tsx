@@ -6,6 +6,7 @@ import { captureMedia, QUALITY_PRESETS, type RecordingQuality } from "@/lib/reco
 import { createPeer, type Signal } from "@/lib/live-preview";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { QRCodeSVG } from "qrcode.react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -36,6 +37,8 @@ function Dashboard() {
   const [wsUrl, setWsUrl] = useState("");
   const [conn, setConn] = useState<ConnState>("disconnected");
   const [peers, setPeers] = useState(0);
+  const [origin, setOrigin] = useState("");
+  const [sourceRequested, setSourceRequested] = useState(false);
   const [systemAudio, setSystemAudio] = useState(true);
   const [microphoneAudio, setMicrophoneAudio] = useState(false);
   const [quality, setQuality] = useState<RecordingQuality>("high");
@@ -49,6 +52,7 @@ function Dashboard() {
   useEffect(() => {
     setRoom(localStorage.getItem("sc-room") || Math.random().toString(36).slice(2, 8).toUpperCase());
     setWsUrl(localStorage.getItem("sc-ws") ?? "");
+    setOrigin(window.location.origin);
     return () => {
       if (recRef.current?.state && recRef.current.state !== "inactive") {
         recRef.current.onstop = null;
@@ -72,6 +76,7 @@ function Dashboard() {
         if (m.type === "signal") void onSignal(m.data);
         if (m.type === "command") {
           const s = stateRef.current;
+          if (m.cmd === "request-source") setSourceRequested(true);
           if (m.cmd === "play") s === "paused" ? resume() : s === "ready" && start();
           if (m.cmd === "pause" && s === "recording") pause();
           if (m.cmd === "stop" && (s === "recording" || s === "paused")) stop();
@@ -227,7 +232,18 @@ function Dashboard() {
           <div className="panel p-5">
             <h2 className="mb-1 text-sm uppercase tracking-widest text-muted-foreground">Pair code</h2>
             <div className="font-mono text-4xl font-bold tracking-[0.2em] text-accent">{room}</div>
-            <p className="mt-2 text-sm text-muted-foreground">Enter this code in the phone remote.</p>
+            <p className="mt-2 text-sm text-muted-foreground">Scan with your phone, or enter this code in the phone remote.</p>
+            {origin && room && (
+              <div className="mt-3 inline-block rounded-md bg-foreground p-2">
+                <QRCodeSVG aria-label="Pairing QR code" value={`${origin}/remote?room=${encodeURIComponent(room)}${wsUrl ? `&ws=${encodeURIComponent(wsUrl)}` : ""}`} size={140} bgColor="transparent" fgColor="currentColor" className="text-background" />
+              </div>
+            )}
+            {sourceRequested && (
+              <div role="alert" className="mt-3 flex items-center justify-between gap-2 rounded-md border border-live p-2 text-sm">
+                <span>Your phone asked you to pick a screen or window.</span>
+                <button className="underline" onClick={() => setSourceRequested(false)}>Dismiss</button>
+              </div>
+            )}
             <div className="mt-4 flex items-center gap-2 text-sm">
               <span className={`size-2 rounded-full ${conn === "connected" ? "bg-ok" : conn === "connecting" ? "bg-warn" : "bg-destructive"}`} />
               {conn} · {wsUrl ? `${Math.max(peers, 0)} remote(s)` : "local mode"}

@@ -2,7 +2,7 @@ import type { Signal } from "./live-preview";
 export type Role = "pc" | "mobile";
 export type RecState = "idle" | "ready" | "recording" | "paused" | "stopped";
 export type Msg =
-  | { type: "command"; cmd: "play" | "pause" | "stop" | "start" }
+  | { type: "command"; cmd: "play" | "pause" | "stop" | "start" | "request-source" }
   | { type: "status"; state: RecState; elapsed: number }
   | { type: "peers"; count: number }
   | { type: "hello" }

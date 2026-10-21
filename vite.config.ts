@@ -12,4 +12,8 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  vite: {
+    // Pre-bundle at startup so it shares the same React copy (avoids null-hooks crash after late re-optimization).
+    optimizeDeps: { include: ["qrcode.react"] },
+  },
 });

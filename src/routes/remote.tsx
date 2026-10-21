@@ -36,8 +36,11 @@ function Remote() {
   const [hasVideo, setHasVideo] = useState(false);
 
   useEffect(() => {
-    setRoom(localStorage.getItem("sc-room") ?? "");
-    setWsUrl(localStorage.getItem("sc-ws") ?? "");
+    const q = new URLSearchParams(window.location.search);
+    const qRoom = q.get("room");
+    setRoom((qRoom ?? localStorage.getItem("sc-room") ?? "").toUpperCase());
+    setWsUrl(q.get("ws") ?? localStorage.getItem("sc-ws") ?? "");
+    if (qRoom) { setPaired(true); window.history.replaceState(null, "", "/remote"); }
   }, []);
 
   useEffect(() => {
@@ -84,7 +87,7 @@ function Remote() {
     return () => { ch.close(); closePeer(); };
   }, [paired, room, wsUrl]);
 
-  const send = (cmd: "play" | "pause" | "stop") => {
+  const send = (cmd: "play" | "pause" | "stop" | "request-source") => {
     chan.current?.send({ type: "command", cmd });
     navigator.vibrate?.(20);
   };
@@ -130,7 +133,10 @@ function Remote() {
       ) : (
         <div className="mt-6 space-y-2 text-sm text-muted-foreground">
           <p>Paired with <span className="font-mono text-accent">{room}</span>. Drag the bubble anywhere; tap it to show or hide controls.</p>
-          <button className="underline" onClick={() => setPaired(false)}>Change pairing</button>
+          <div className="flex gap-4">
+            <button className="underline" onClick={() => setPaired(false)}>Change pairing</button>
+            <button className="underline" disabled={conn !== "connected"} onClick={() => send("request-source")}>Ask PC to pick a screen</button>
+          </div>
         </div>
       )}
       {paired && (
