@@ -123,9 +123,10 @@ function Remote() {
               className="mt-1 w-full rounded-md border bg-background px-3 py-3 text-center font-mono text-2xl tracking-[0.3em]" />
           </label>
           <label className="block text-sm">
-            <span className="text-muted-foreground">Relay server URL (same as PC)</span>
-            <input value={wsUrl} onChange={(e) => setWsUrl(e.target.value.trim())} placeholder="wss://your-relay.example.com"
+            <span className="text-muted-foreground">Relay server URL (optional)</span>
+            <input value={wsUrl} onChange={(e) => setWsUrl(e.target.value.trim())} placeholder="wss://your-own-relay.example.com"
               className="mt-1 w-full rounded-md border bg-background px-3 py-2 font-mono text-sm" />
+            <span className="mt-1 block text-xs text-muted-foreground">Leave empty to use the app's built-in relay.</span>
           </label>
           <button className="ctl ctl-rec w-full">Connect</button>
           <p className="text-xs text-muted-foreground">Tip: use "Add to Home Screen" to install this remote as an app.</p>
@@ -149,7 +150,7 @@ function Remote() {
           )}
         </div>
       )}
-      {paired && <PreviewHelp context={{ conn, pcState, hasVideo, relayMode: wsUrl ? "relay" : "local" }} />}
+      {paired && <PreviewHelp context={{ conn, pcState, hasVideo, relayMode: wsUrl ? "relay" : "cloud" }} />}
 
       {paired && (
         <div className="fixed z-50 flex items-center gap-2" style={{ left: pos.x, top: pos.y }}>

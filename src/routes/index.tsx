@@ -246,7 +246,7 @@ function Dashboard() {
             )}
             <div className="mt-4 flex items-center gap-2 text-sm">
               <span className={`size-2 rounded-full ${conn === "connected" ? "bg-ok" : conn === "connecting" ? "bg-warn" : "bg-destructive"}`} />
-              {conn} · {wsUrl ? `${Math.max(peers, 0)} remote(s)` : "local mode"}
+              {conn} · {wsUrl ? `${Math.max(peers, 0)} remote(s)` : "built-in relay"}
             </div>
           </div>
           <div className="panel space-y-3 p-5 text-sm">
@@ -275,11 +275,11 @@ function Dashboard() {
           </div>
           <div className="panel space-y-3 p-5 text-sm">
             <label className="block">
-              <span className="text-muted-foreground">Relay server URL</span>
-              <input defaultValue={wsUrl} key={wsUrl} onBlur={(e) => setWsUrl(e.target.value.trim())} placeholder="wss://your-relay.example.com"
+              <span className="text-muted-foreground">Relay server URL (optional)</span>
+              <input defaultValue={wsUrl} key={wsUrl} onBlur={(e) => setWsUrl(e.target.value.trim())} placeholder="wss://your-own-relay.example.com"
                 className="mt-1 w-full rounded-md border bg-background px-3 py-2 font-mono" />
             </label>
-            <p className="text-xs text-muted-foreground">Leave empty to test with a remote tab in this same browser.</p>
+            <p className="text-xs text-muted-foreground">Leave empty to use the app's built-in relay — no separate server needed.</p>
           </div>
         </aside>
       </div>

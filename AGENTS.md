@@ -10,3 +10,4 @@
 <!-- LOVABLE:END -->
 
 - Keep capture presets, media acquisition, audio mixing, and resource cleanup in the browser-only `src/lib/recording-media.ts` helper so capture behavior can be tested independently of the recorder UI.
+- Signaling defaults to the built-in cloud relay (Realtime broadcast + presence channel per pair code) whenever the relay URL field is empty; `ws-server/` is optional and BroadcastChannel is only a no-cloud fallback — QR pairing and live preview must work with zero server setup.

@@ -3,7 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { Sparkles } from "lucide-react";
 import { diagnosePreview } from "@/lib/diagnose.functions";
 
-type Ctx = { conn: string; pcState: string | null; hasVideo: boolean; relayMode: "relay" | "local" };
+type Ctx = { conn: string; pcState: string | null; hasVideo: boolean; relayMode: "relay" | "cloud" };
 
 export function PreviewHelp({ context }: { context: Ctx }) {
   const run = useServerFn(diagnosePreview);
