@@ -75,7 +75,7 @@ export function openChannel(opts: {
     };
   }
 
-  if (import.meta.env.VITE_SUPABASE_URL) {
+  if (import.meta.env["VITE_SUPABASE_URL"]) {
     let channel: RealtimeChannel | null = null;
     let sb: SupabaseClient | null = null;
     const connect = async () => {
