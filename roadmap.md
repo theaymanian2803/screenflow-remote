@@ -1,2 +1,4 @@
 - [x] Add recording quality presets and independent system/microphone audio controls.
 - [x] Verify quality constraints, audio mixing, permissions, and recording playback (12 tests passed; browser recording/download/playback checked with simulated capture devices).
+- [x] Built-in cloud relay for signaling so the phone pairs and previews with zero server setup; live preview now starts as soon as a source is picked on the PC (no Start needed).
+- [ ] Scan the QR with a real phone over Wi-Fi and confirm auto-pairing, live preview and bubble controls end to end.
