@@ -8,7 +8,11 @@ export type Msg =
   | { type: "status"; state: RecState; elapsed: number }
   | { type: "peers"; count: number }
   | { type: "hello" }
-  | { type: "signal"; data: Signal };
+  | { type: "signal"; data: Signal }
+  | { type: "mouse"; mode: MouseMode; action: MouseAction; x: number; y: number };
+
+export type MouseMode = "os" | "laser";
+export type MouseAction = "move" | "click" | "dblclick";
 
 export type ConnState = "connecting" | "connected" | "disconnected";
 
