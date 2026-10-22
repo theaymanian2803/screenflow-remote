@@ -51,6 +51,7 @@ function Dashboard() {
 
   // Phone pointer / remote mouse
   const [pointer, setPointer] = useState<{ x: number; y: number } | null>(null);
+  const [vidAR, setVidAR] = useState(16 / 9);
   const [ripples, setRipples] = useState<{ id: number; x: number; y: number; dbl: boolean }[]>([]);
   const pointerTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [allowMouse, setAllowMouse] = useState(false);
@@ -260,7 +261,16 @@ function Dashboard() {
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
         <section className="panel overflow-hidden">
           <div className="relative aspect-video bg-background">
-            <video ref={videoRef} autoPlay muted playsInline className={`size-full object-contain ${state === "stopped" ? "hidden" : ""}`} />
+            <video ref={videoRef} autoPlay muted playsInline className={`size-full object-contain ${state === "stopped" ? "hidden" : ""}`}
+              onLoadedMetadata={(e) => setVidAR(e.currentTarget.videoWidth / (e.currentTarget.videoHeight || 1))}
+              onResize={(e) => setVidAR(e.currentTarget.videoWidth / (e.currentTarget.videoHeight || 1))} />
+            {state !== "stopped" && state !== "idle" && (pointer || ripples.length > 0) && (
+              <div aria-hidden className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+                style={{ aspectRatio: vidAR, ...(vidAR >= 16 / 9 ? { width: "100%" } : { height: "100%" }) }}>
+                {pointer && <span className="laser-dot" style={{ left: `${pointer.x * 100}%`, top: `${pointer.y * 100}%` }} />}
+                {ripples.map((r) => <span key={r.id} className={`laser-ripple ${r.dbl ? "laser-ripple-dbl" : ""}`} style={{ left: `${r.x * 100}%`, top: `${r.y * 100}%` }} />)}
+              </div>
+            )}
             {state === "stopped" && blobUrl && <video src={blobUrl} controls className="size-full object-contain" />}
             {state === "idle" && (
               <button onClick={pickSource} disabled={picking} className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-muted-foreground hover:text-foreground">
@@ -327,6 +337,29 @@ function Dashboard() {
             </div>
             {captureError && <p role="alert" className="text-sm text-destructive">{captureError}</p>}
             {audioWarning && <p role="status" className="text-sm text-warn">{audioWarning}</p>}
+          </div>
+          <div className="panel space-y-3 p-5 text-sm">
+            <h2 className="text-sm uppercase tracking-widest text-muted-foreground">Phone mouse control</h2>
+            <p className="text-xs text-muted-foreground">
+              Pointer mode works right away and shows a red dot on the preview. To let your phone click your real computer,
+              run the mouse helper on this PC (<span className="font-mono">cd ws-server &amp;&amp; npm install &amp;&amp; npm run mouse</span>) and enter the code it prints.
+            </p>
+            <label className="block">
+              <span className="text-muted-foreground">Helper access code</span>
+              <input value={helperCode} onChange={(e) => setHelperCode(e.target.value.trim())} placeholder="e.g. 3FA9C21B"
+                className="mt-1 w-full rounded-md border bg-background px-3 py-2 font-mono uppercase" />
+            </label>
+            <div className="flex items-center justify-between gap-3">
+              <label htmlFor="allow-mouse">Let my phone control this computer's mouse</label>
+              <Switch id="allow-mouse" checked={allowMouse} disabled={!helperCode} onCheckedChange={setAllowMouse} />
+            </div>
+            {allowMouse && (
+              <p role="status" className={`text-xs ${helperState === "ready" ? "text-ok" : helperState === "denied" ? "text-destructive" : "text-warn"}`}>
+                {helperState === "ready" && "Mouse helper connected — taps on your phone now click this computer."}
+                {helperState === "connecting" && "Looking for the mouse helper on this PC… make sure it is running."}
+                {helperState === "denied" && "Wrong access code. Check the code the helper printed and try again."}
+              </p>
+            )}
           </div>
           <div className="panel space-y-3 p-5 text-sm">
             <label className="block">
