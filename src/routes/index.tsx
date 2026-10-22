@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { Monitor, Circle, Pause, Play, Square, Download, Smartphone } from "lucide-react";
-import { openChannel, fmt, type RecState, type ConnState } from "@/lib/control-channel";
+import { openChannel, fmt, type RecState, type ConnState, type Msg } from "@/lib/control-channel";
 import { captureMedia, QUALITY_PRESETS, type RecordingQuality } from "@/lib/recording-media";
 import { createPeer, type Signal } from "@/lib/live-preview";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -49,6 +49,60 @@ function Dashboard() {
   const stateRef = useRef(state);
   stateRef.current = state;
 
+  // Phone pointer / remote mouse
+  const [pointer, setPointer] = useState<{ x: number; y: number } | null>(null);
+  const [ripples, setRipples] = useState<{ id: number; x: number; y: number; dbl: boolean }[]>([]);
+  const pointerTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [allowMouse, setAllowMouse] = useState(false);
+  const [helperCode, setHelperCode] = useState("");
+  const [helperState, setHelperState] = useState<"off" | "connecting" | "ready" | "denied">("off");
+  const helperRef = useRef<WebSocket | null>(null);
+
+  useEffect(() => { setHelperCode(localStorage.getItem("sc-mouse-code") ?? ""); }, []);
+  useEffect(() => {
+    if (!allowMouse || !helperCode) { setHelperState("off"); return; }
+    localStorage.setItem("sc-mouse-code", helperCode);
+    let closed = false;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    const connect = () => {
+      setHelperState("connecting");
+      const ws = new WebSocket("ws://localhost:8788");
+      helperRef.current = ws;
+      ws.onopen = () => ws.send(JSON.stringify({ type: "auth", token: helperCode.trim().toUpperCase() }));
+      ws.onmessage = (e) => {
+        const m = JSON.parse(e.data);
+        if (m.type === "ok") setHelperState("ready");
+        if (m.type === "denied") { closed = true; setHelperState("denied"); }
+      };
+      ws.onclose = () => {
+        helperRef.current = null;
+        if (!closed) { setHelperState("connecting"); retry = setTimeout(connect, 2500); }
+      };
+    };
+    connect();
+    return () => { closed = true; clearTimeout(retry); helperRef.current?.close(); helperRef.current = null; };
+  }, [allowMouse, helperCode]);
+
+  const allowMouseRef = useRef(allowMouse);
+  allowMouseRef.current = allowMouse;
+  const onMouse = (m: Extract<Msg, { type: "mouse" }>) => {
+    if (m.mode === "laser") {
+      setPointer({ x: m.x, y: m.y });
+      clearTimeout(pointerTimer.current);
+      pointerTimer.current = setTimeout(() => setPointer(null), 4000);
+      if (m.action !== "move") {
+        const id = Date.now() + Math.random();
+        setRipples((r) => [...r, { id, x: m.x, y: m.y, dbl: m.action === "dblclick" }]);
+        setTimeout(() => setRipples((r) => r.filter((p) => p.id !== id)), 700);
+      }
+      return;
+    }
+    const ws = helperRef.current;
+    if (allowMouseRef.current && ws?.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ action: m.action, x: m.x, y: m.y }));
+    }
+  };
+
   useEffect(() => {
     setRoom(localStorage.getItem("sc-room") || Math.random().toString(36).slice(2, 8).toUpperCase());
     setWsUrl(localStorage.getItem("sc-ws") ?? "");
@@ -74,6 +128,7 @@ function Dashboard() {
         if (m.type === "peers") setPeers(m.count - 1);
         if (m.type === "hello") void offerPreview();
         if (m.type === "signal") void onSignal(m.data);
+        if (m.type === "mouse") onMouse(m);
         if (m.type === "command") {
           const s = stateRef.current;
           if (m.cmd === "request-source") setSourceRequested(true);
