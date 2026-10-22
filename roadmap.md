@@ -2,3 +2,5 @@
 - [x] Verify quality constraints, audio mixing, permissions, and recording playback (12 tests passed; browser recording/download/playback checked with simulated capture devices).
 - [x] Built-in cloud relay for signaling so the phone pairs and previews with zero server setup; live preview now starts as soon as a source is picked on the PC (no Start needed).
 - [ ] Scan the QR with a real phone over Wi-Fi and confirm auto-pairing, live preview and bubble controls end to end.
+- [x] Phone remote: View / Pointer / Mouse touch modes, tap=click, double-tap=double-click, drag=move; Fit-to-screen + Fit/Fill toggle; local mouse helper for real OS clicks.
+- [ ] Try Pointer and Mouse modes from a real phone (simulated test couldn't render the preview video).

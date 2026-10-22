@@ -2,6 +2,7 @@
   "name": "screencast-relay",
   "type": "module",
   "private": true,
-  "scripts": { "start": "node server.js" },
-  "dependencies": { "ws": "^8.18.0" }
+  "scripts": { "start": "node server.js", "mouse": "node mouse-agent.js" },
+  "dependencies": { "ws": "^8.18.0" },
+  "optionalDependencies": { "@nut-tree-fork/nut-js": "^4.2.0" }
 }

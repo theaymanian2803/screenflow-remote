@@ -85,3 +85,29 @@
   &:disabled { opacity: .35; cursor: not-allowed; }
 }
 @utility ctl-rec { background: var(--color-primary); color: var(--color-primary-foreground); }
+
+/* Phone laser pointer overlay on the PC preview */
+.laser-dot {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  border-radius: 9999px;
+  background: var(--live);
+  box-shadow: 0 0 0 4px color-mix(in oklch, var(--live) 35%, transparent), 0 0 24px 6px var(--live);
+  transition: left 60ms linear, top 60ms linear;
+}
+.laser-ripple {
+  position: absolute;
+  width: 56px;
+  height: 56px;
+  margin: -28px 0 0 -28px;
+  border-radius: 9999px;
+  border: 3px solid var(--live);
+  animation: laser-ripple 650ms ease-out forwards;
+}
+.laser-ripple-dbl { border-width: 6px; }
+@keyframes laser-ripple {
+  from { transform: scale(0.2); opacity: 1; }
+  to { transform: scale(1.4); opacity: 0; }
+}
