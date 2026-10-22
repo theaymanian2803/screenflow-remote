@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Pause, Play, Square } from "lucide-react";
-import { openChannel, fmt, type RecState, type ConnState } from "@/lib/control-channel";
+import { Pause, Play, Square, Maximize2, Minimize2, MousePointer2, Crosshair, Hand, Expand, Shrink } from "lucide-react";
+import { openChannel, fmt, type RecState, type ConnState, type MouseAction } from "@/lib/control-channel";
 import { createPeer, type Signal } from "@/lib/live-preview";
 import { PreviewHelp } from "@/components/PreviewHelp";
 
@@ -34,6 +34,11 @@ function Remote() {
   const peerRef = useRef<RTCPeerConnection | null>(null);
   const pending = useRef<RTCIceCandidateInit[]>([]);
   const [hasVideo, setHasVideo] = useState(false);
+  const [mouseMode, setMouseMode] = useState<"off" | "laser" | "os">("off");
+  const [full, setFull] = useState(false);
+  const [fill, setFill] = useState(false);
+  const touch = useRef<{ x: number; y: number; drag: boolean; last: number } | null>(null);
+  const tapTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
@@ -92,6 +97,52 @@ function Remote() {
     navigator.vibrate?.(20);
   };
 
+  // Map a touch on the preview to 0..1 coordinates of the shared screen (accounts for fit/fill letterboxing).
+  const toScreen = (e: React.PointerEvent) => {
+    const v = videoRef.current;
+    if (!v || !v.videoWidth) return null;
+    const r = v.getBoundingClientRect();
+    const scale = (fill ? Math.max : Math.min)(r.width / v.videoWidth, r.height / v.videoHeight);
+    const w = v.videoWidth * scale, h = v.videoHeight * scale;
+    const x = (e.clientX - r.left - (r.width - w) / 2) / w;
+    const y = (e.clientY - r.top - (r.height - h) / 2) / h;
+    if (x < 0 || x > 1 || y < 0 || y > 1) return null;
+    return { x, y };
+  };
+  const sendMouse = (action: MouseAction, p: { x: number; y: number }) => {
+    if (mouseMode === "off") return;
+    chan.current?.send({ type: "mouse", mode: mouseMode, action, x: p.x, y: p.y });
+  };
+  const onTouchDown = (e: React.PointerEvent) => {
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    touch.current = { x: e.clientX, y: e.clientY, drag: false, last: 0 };
+  };
+  const onTouchMove = (e: React.PointerEvent) => {
+    const t = touch.current;
+    if (!t) return;
+    if (!t.drag && Math.hypot(e.clientX - t.x, e.clientY - t.y) > 8) t.drag = true;
+    const now = performance.now();
+    if (t.drag && now - t.last > 40) {
+      t.last = now;
+      const p = toScreen(e);
+      if (p) sendMouse("move", p);
+    }
+  };
+  const onTouchUp = (e: React.PointerEvent) => {
+    const t = touch.current;
+    touch.current = null;
+    if (!t || t.drag) return;
+    const p = toScreen(e);
+    if (!p) return;
+    if (tapTimer.current) {
+      clearTimeout(tapTimer.current); tapTimer.current = undefined;
+      sendMouse("dblclick", p); navigator.vibrate?.([15, 40, 15]);
+    } else {
+      sendMouse("move", p);
+      tapTimer.current = setTimeout(() => { tapTimer.current = undefined; sendMouse("click", p); navigator.vibrate?.(15); }, 260);
+    }
+  };
+
   const onDown = (e: React.PointerEvent) => {
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
     drag.current = { dx: e.clientX - pos.x, dy: e.clientY - pos.y, moved: false };
@@ -141,14 +192,39 @@ function Remote() {
         </div>
       )}
       {paired && (
-        <div className="panel relative mt-4 aspect-video overflow-hidden bg-background">
-          <video ref={videoRef} autoPlay muted playsInline className="size-full object-contain" />
+        <div className={full ? "fixed inset-0 z-40 bg-background" : "panel relative mt-4 aspect-video overflow-hidden bg-background"}>
+          <video ref={videoRef} autoPlay muted playsInline className={`size-full ${fill ? "object-cover" : "object-contain"}`} />
+          {hasVideo && mouseMode !== "off" && (
+            <div aria-label="Touch area for remote mouse" className="absolute inset-0"
+              onPointerDown={onTouchDown} onPointerMove={onTouchMove} onPointerUp={onTouchUp} onPointerCancel={() => { touch.current = null; }} />
+          )}
           {!hasVideo && (
             <div className="absolute inset-0 flex items-center justify-center p-4 text-center text-sm text-muted-foreground">
               Live preview appears here once a screen or window is chosen on the computer.
             </div>
           )}
+          <div className="absolute right-2 top-2 flex gap-1">
+            {full && (
+              <button aria-label={fill ? "Fit whole screen" : "Fill phone screen"} className="ctl bg-background/80 p-2" onClick={() => setFill((f) => !f)}>
+                {fill ? <Shrink className="size-4" /> : <Expand className="size-4" />}
+              </button>
+            )}
+            <button aria-label={full ? "Exit full screen" : "Fit to screen"} className="ctl bg-background/80 p-2" onClick={() => setFull((f) => !f)}>
+              {full ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+            </button>
+          </div>
+          <div role="radiogroup" aria-label="Touch mode" className="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-1 rounded-full bg-background/80 p-1 text-xs">
+            {([["off", Hand, "View"], ["laser", Crosshair, "Pointer"], ["os", MousePointer2, "Mouse"]] as const).map(([m, Icon, label]) => (
+              <button key={m} role="radio" aria-checked={mouseMode === m} onClick={() => setMouseMode(m)}
+                className={`flex items-center gap-1 rounded-full px-3 py-1.5 ${mouseMode === m ? "bg-accent text-accent-foreground" : "text-muted-foreground"}`}>
+                <Icon className="size-3.5" /> {label}
+              </button>
+            ))}
+          </div>
         </div>
+      )}
+      {paired && mouseMode === "os" && (
+        <p className="mt-2 text-xs text-muted-foreground">Mouse mode: tap to click, double-tap to double-click, drag to move. The computer must have the mouse helper running and allowed.</p>
       )}
       {paired && <PreviewHelp context={{ conn, pcState, hasVideo, relayMode: wsUrl ? "relay" : "cloud" }} />}
 
